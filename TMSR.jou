@@ -1,0 +1,145 @@
+#!python
+# Script to create a mesh of the TMSR core with variable model parameters.
+
+import math
+import numpy as np
+
+for i in range (0,65):
+    cubit.cmd('delete volume ' + str(i))
+print('Deleted all existing volumes.')
+
+##### Outermost cylinder #####
+cyl1_h = 3.064		## height (m)
+cyl1_r = 2.85/2		## radius (m)
+
+##### Innermost (skinniest) cylinder #####
+cyl2_h = cyl1_h	# height (same as outermost boundary cylinder) [removed 0.5*]
+cyl2_r = 0.75/2		# radius (not from any benchmark) [does not matter for Dan's benchmark]
+
+##### Middle cylinder #####
+cyl3_h = cyl1_h	## height (same as outermost boundary cylinder)
+cyl3_r = 1.35/2		## radius
+
+##### Cone angles and core height #####
+core_h = (205.7/306.4)*cyl1_h	## core height (including angled portions, if any)
+theta1 = 45			## top angle
+theta2 = 45			## bottom angle
+
+##### Fraction of core that is active #####
+active_h = 92.85/205.7	# bottom boundary of fuel region of core expressed as a fraction of the total core height (core_h) (0 = very top of core, 1 = very bottom of core)
+
+##### Geometrical calculations #####
+cone1_h = cyl3_r*math.tan(math.radians(theta1))
+cone1_h_exp = (cyl3_r-cyl2_r)*math.tan(math.radians(theta1))
+cone2_h = cyl3_r*math.tan(math.radians(theta2))
+cone2_h_exp = (cyl3_r-cyl2_r)*math.tan(math.radians(theta2))
+core_straight_h = core_h - cone1_h_exp - cone2_h_exp
+
+##### Checks if angles are too large #####
+max_angle = math.degrees(math.atan(0.5*core_h/(cyl3_r-cyl2_r)))
+
+if ((cone1_h_exp+cone2_h_exp)>core_h):
+    print('Angles are too large to create the angled edges. Choose smaller angles.')
+    print('The maximum angle is:')
+    print(max_angle)
+    print('You have entered theta1 = ' + str(theta1) + ' and theta2 = ' + str(theta2))
+else:
+    if (theta1==0 or theta2==0):
+        cubit.cmd('Cylinder height ' + str(cyl1_h) + ' radius ' + str(cyl1_r))
+        if (theta1==0 and theta2==0):
+            if (active_h != 1.0):
+                cubit.cmd('Cylinder height ' + str(active_h*core_h) + ' radius ' + str(cyl3_r))
+                cubit.cmd('Cylinder height ' + str((1-active_h)*core_h) + ' radius ' + str(cyl3_r))
+                cubit.cmd('Cylinder height ' + str((cyl1_h-core_h)/2) + ' radius ' + str(cyl3_r))
+                cubit.cmd('Cylinder height ' + str((cyl1_h-core_h)/2) + ' radius ' + str(cyl3_r))
+                ##### Compress all to 1 (outer cylinder), 2 (active region), 3 (inactive region), 4 (top reflector), 5 (lower reflector) #####
+                cubit.cmd('Compress all')
+                cubit.cmd('move Volume 4 location 0 0 ' + str(cyl1_h/2 - 0.5*(cyl1_h-core_h)/2))
+                cubit.cmd('move Volume 5 location 0 0 ' + str(-1*cyl1_h/2 + 0.5*(cyl1_h-core_h)/2))
+                cubit.cmd('move Volume 2 location 0 0 ' + str(-1*cyl1_h/2 + 0.5*active_h*core_h + (cyl1_h-core_h)/2 + (1-active_h)*core_h))
+                cubit.cmd('move Volume 3 location 0 0 ' + str(-1*cyl1_h/2 + 0.5*(1-active_h)*core_h + (cyl1_h-core_h)/2))
+            else:
+                cubit.cmd('Cylinder height ' + str(active_h*core_h) + ' radius ' + str(cyl3_r))
+                cubit.cmd('Cylinder height ' + str((cyl1_h-core_h)/2) + ' radius ' + str(cyl3_r))
+                cubit.cmd('Cylinder height ' + str((cyl1_h-core_h)/2) + ' radius ' + str(cyl3_r))
+                ###### Compress all to 1 (outer cylinder), 2 (active region), 3 (top reflector), 4 (bottom reflector) #####
+                cubit.cmd('Compress all')
+                cubit.cmd('move Volume 3 location 0 0 ' + str(cyl1_h/2 - 0.5*(cyl1_h-core_h)/2))
+                cubit.cmd('move Volume 4 location 0 0 ' + str(-1*cyl1_h/2 + 0.5*(cyl1_h-core_h)/2))
+                cubit.cmd('move Volume 2 location 0 0 ' + str(-1*cyl1_h/2 + 0.5*active_h*core_h + (cyl1_h-core_h)/2 + (1-active_h)*core_h))
+                print('Capability not yet implemented for importing pebbles with a full active region')
+        else:
+            print('Capability not currently implemented for one angled edge and one flat edge to the core region.')
+    else:
+        ##### Create elements #####
+        cubit.cmd('Cylinder height ' + str(cyl1_h) + ' radius ' + str(cyl1_r))
+        cubit.cmd('Cylinder height ' + str(cyl2_h) + ' radius ' + str(cyl2_r))
+        cubit.cmd('create frustum height ' + str(cone1_h) + ' radius ' + str(cyl3_r) + ' top 0')
+        cubit.cmd('create frustum height ' + str(cone2_h) + ' radius ' + str(cyl3_r) + ' top 0')
+        cubit.cmd('Create cylinder height ' + str(core_straight_h) + ' radius ' + str(cyl3_r))
+        ##### Assemble geometry #####
+        cubit.cmd('compress all')
+        cone1_base = cyl1_h/2 - ((cyl1_h-core_h)/2) - cone1_h_exp
+        cone1_mid = cone1_base + cone1_h/2
+        cone2_base = -1*(cyl1_h/2 - ((cyl1_h-core_h)/2) - cone2_h_exp)
+        cone2_mid = cone2_base - cone2_h/2
+        core_center = (cone2_h_exp - cone1_h_exp)	
+        cubit.cmd('move Volume 3 location 0 0 ' + str(cone1_mid))
+        cubit.cmd('Volume 4 reflect Z')
+        cubit.cmd('move Volume 4 location 0 0 ' + str(cone2_mid))
+        cubit.cmd('move Volume 5 location 0 0 ' + str(core_center/2))
+        cubit.cmd('unite body 5 4 3 2')
+        ##### Make sure cones don't extend out of cylinder #####
+        cubit.cmd('body 5 copy move 0 0 0')
+        ###### Divide the core into active and not active regions #####
+        cubit.cmd('Cylinder height ' + str(cyl1_h) + ' radius ' + str(cyl3_r))
+        cubit.cmd('move Volume 7 location 0 0 ' + str(cyl1_h/2 + -1*cyl1_h/2 + (cyl1_h - core_h)/2 + (1-active_h)*core_h))
+        cubit.cmd('Cylinder height ' + str(cyl1_h) + ' radius ' + str(cyl3_r))
+        cubit.cmd('move Volume 8 location 0 0 ' + str(-1*(cyl1_h/2 +  -1*cyl1_h/2 + (cyl1_h - core_h)/2 + active_h*core_h)))
+        cubit.cmd('intersect body 5 7')
+        cubit.cmd('intersect body 6 8')
+        ##### Divide the inlet and outlet smaller sections into their own materials #####
+        cubit.cmd('Cylinder height ' + str((cyl1_h-core_h)/2) + ' radius ' + str(cyl2_r))
+        cubit.cmd('move Volume 9 location 0 0 ' + str(core_h/2 + (cyl1_h-core_h)/4))
+        cubit.cmd('body 9 copy move 0 0 0')
+        cubit.cmd('subtract body 9 from body 7')
+        cubit.cmd('Cylinder height ' + str((cyl1_h-core_h)/2) + ' radius ' + str(cyl2_r))
+        cubit.cmd('move Volume 11 location 0 0 ' + str(-1*(core_h/2 + (cyl1_h-core_h)/4)))
+        cubit.cmd('body 11 copy move 0 0 0')
+        cubit.cmd('subtract body 11 from body 8')
+        ##### Compress all to volumes 1 (outer cylinder), 2 (active region), 3 (inactive region), 4 (top reflector), 5 (bottom reflector) #####
+        cubit.cmd('Compress all')
+        print('Capability not yet implemented for importing pebbles with angled sides.')
+print('Geometry complete. Now adding pebbles.')
+
+
+
+##### Import pebbles #####
+if ((theta1==0) and (theta2==0) and (active_h!=1.0)):
+    existingvolumes = 5
+    data = np.loadtxt('/Users/aprilnovak/Documents/shake.inp')
+    x = data[:,0]
+    y = data[:,1]
+    z = data[:,2]
+    r = data[:,3]
+    count = 0
+    cut = []
+    cutcount = []
+    for i in range (0,len(x)):
+        cubit.cmd('create sphere radius ' + str(r[i]/100))
+        cubit.cmd('Compress all')
+        cubit.cmd('move Volume ' + str(i+1+existingvolumes + count) + ' location ' + str(x[i]/100) + ' ' + str(y[i]/100) + ' ' + str(z[i]/100))
+        if ((x[i]*x[i] + y[i]*y[i]) > (135/2 - 3)*(135/2 - 3)):
+            cubit.cmd('Cylinder height 4 radius 0.675')
+            count = count + 1
+            cut.append(i)
+            cutcount.append(count)
+##### Cut pebbles that intersect the azimuthal surface of the active region #####
+    for i in range (0,len(cut)):
+        cubit.cmd('intersect body ' + str(cut[i] + 1 + existingvolumes + cutcount[i]) + ' ' + str(cut[i] + 1 + existingvolumes + cutcount[i] - 1))
+print('Complete!')
+
+
+
+
+
