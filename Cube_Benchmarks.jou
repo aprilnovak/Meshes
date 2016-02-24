@@ -142,3 +142,4 @@ if (case == 2):
             cubit.cmd('refine volume ' + str(i) + ' numsplit ' + str(layer_refine) + ' bias 1.0 depth 1 smooth')
 #
 
+
