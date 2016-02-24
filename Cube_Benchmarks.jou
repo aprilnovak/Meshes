@@ -1,0 +1,144 @@
+#!python
+# Cubic benchmarks - 
+#     Case 1: homogeneous mixture of material
+#     Case 2: Cystal structure (FCC/BCC/SC) with specified packing fraction and multi-layered pebbles
+#
+# All volumes are meshed using tetmesh. To obtain a continuous solution, the nodes at the interfaces must match. 
+
+import math
+import fractions
+
+# DELETE ANY EXISTING GEOMETRIES ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+number_to_delete = 30	# ______ number of volumes to delete before build. No volumes should already exist. 
+for i in range (0,number_to_delete):
+    cubit.cmd('split body ' + str(i))
+    cubit.cmd('delete volume ' + str(i))
+print('Deleted all existing volumes.')
+
+
+# USER INPUT ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+# Which benchmark to run
+case = 2		# ______ Benchmark to run (case 1 or case 2)
+
+# Case 1
+side_length = 9.0516/100	# ______ Side length of cube (m)
+vol_factor = 1		# ______ Size factor for mesh (1 = fine, 10 = coarse)
+
+# Case 2
+packing_fraction = 0.5	# ______ Packing fraction for the bed (1.0 = entirely pebbles, 0.0 = entirely flibe)
+lattice = "SC"		# ______ Lattice type (FCC, BCC, or SC)
+radius = [0.025, 0.0275, 0.03]	# ______ Layer outer radii, listed in ascending order (m)
+
+# Meshing (1 = standard, 2+ = very fine)
+fluid_refine = 1 	# ______ Fluid volume mesh refinement parameter
+layer_refine = 1	# ______ Pebble layers mesh refinement parameters
+
+
+# GEOMETRICAL CALCULATION  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+if (case == 1):
+    cubit.cmd('brick x ' + str(side_length))
+    cubit.cmd('compress all')
+    cubit.cmd('volume 1 size auto factor ' + str(vol_factor))
+    cubit.cmd('mesh volume 1')
+    print('Completed Case 1.')
+elif (case == 2):
+    #
+    if (lattice == "FCC"):
+        side_length = (4*(fractions.Fraction(4,3))*math.pi*(radius[-1]**3)/0.61)**fractions.Fraction(1,3)
+        num_pebbles = 8 + 6 	# 8 corner, 6 face
+        actual_peb = num_pebbles
+        max_pack = 0.74
+    #
+    if (lattice == "BCC"):
+        side_length = (2*4*math.pi*(radius[-1] ** 3)/(3*packing_fraction))**fractions.Fraction(1,3)
+        num_pebbles = 8 	# 8 corner, 1 center (defined specially)
+        actual_peb = num_pebbles + 1
+        max_pack = 0.68
+    #
+    if (lattice == "SC"):
+        side_length = (1*4*math.pi*(radius[-1] ** 3)/(3*packing_fraction))**fractions.Fraction(1,3)
+        num_pebbles = 8 	# 8 corner
+        actual_peb = num_pebbles
+        max_pack = 0.524
+    #
+    if ((lattice != "FCC") and (lattice != "BCC") and (lattice != "SC") or (packing_fraction > max_pack)):
+        print('Select appropriate lattice type or change packing fraction to an allowable value.')
+    else:
+        p = side_length/2
+        cubit.cmd('brick x ' + str(side_length))
+        #
+        # Create the pebbles. The first 8 are included for every lattice option. 
+        x = [p, p, p, p, -p, -p, -p, -p, p, -p, 0, 0, 0, 0]
+        y = [p, -p, p, -p, p, -p, p, -p, 0, 0, p, -p, 0, 0]
+        z = [p, p, -p, -p, p, -p, -p, p, 0, 0, 0, 0, p, -p]
+        #
+        for i in range(1, num_pebbles + 1):
+            #
+            # Create annular pebbles for all layers except the center (treated as a solid sphere)
+            for r in range( 0, len(radius) - 1 ):
+                cubit.cmd('sphere radius ' + str(radius[r+1]) + ' inner radius ' + str(radius[r]))
+            #
+            # Create center solid sphere of each pebble
+            cubit.cmd('sphere radius ' + str(radius[0]) )
+        cubit.cmd('compress all')
+        #
+        # Move layered pebble to correct location
+        count = 1
+        for j in range(0, num_pebbles):
+            for i in range (1, len(radius) + 1):
+                cubit.cmd('move volume ' + str(count + 1) + ' location ' + str(x[j]) + ' ' + str(y[j]) + ' ' + str(z[j]))
+                count = count + 1
+        #
+        # Copy cube for later subtraction
+        for i in range(1, num_pebbles+1):
+            cubit.cmd('body 1 copy move 0 0 0')
+            cubit.cmd('compress all')
+        j = 0
+        #
+        # For each pebble, intersect the cube with all layers of the pebble
+        string = ' '
+        for i in range(1,num_pebbles + 1):
+            for r in range (1, len(radius) + 1):
+                string = string + str(i + r + j) + ' '
+            cubit.cmd('intersect body ' + str(i+len(radius)*num_pebbles+1) + ' ' + str(string))
+            j = j + len(radius) - 1
+            string = ' '
+        # 
+        # Add extra center pebble for BCC
+        if (lattice == "BCC"):
+            for r in range( 0, len(radius) - 1 ):
+                cubit.cmd('sphere radius ' + str(radius[r+1]) + ' inner radius ' + str(radius[r]))
+            cubit.cmd('sphere radius ' + str(radius[0]) )
+        cubit.cmd('compress all')
+        #
+        # Copy each pebble, then subtract all volumes from the cube
+        all_vols = ' '
+        for i in range (2, len(radius)*actual_peb+2):
+            cubit.cmd('body ' + str(i) + ' copy move 0 0 0')
+            all_vols = all_vols + ' ' + str(i)
+        cubit.cmd('subtract body ' + str(all_vols) + ' from body 1')
+        cubit.cmd('compress all')        
+else:
+    print('Choose case number as 1 or 2.')
+#
+
+# MESH VOLUMES ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+if (case == 2):
+    for i in range (1, len(radius)*actual_peb + 2):
+        cubit.cmd('Volume ' + str(i) + ' scheme Tetmesh')
+        cubit.cmd('set tetmesher interior points on')
+        cubit.cmd('set tetmesher optimize level 3 overconstrained off sliver off')
+        cubit.cmd('set tetmesher boundary recovery off')
+        cubit.cmd('volume ' + str(i) + ' tetmesh growth_factor 1.0')
+        cubit.cmd('mesh Volume ' + str(i))
+        #
+        if ( i == len(radius)*actual_peb + 1):
+            cubit.cmd('refine volume ' + str(i) + ' numsplit ' + str(fluid_refine) + ' bias 1.0 depth 1 smooth')
+        else:
+            cubit.cmd('refine volume ' + str(i) + ' numsplit ' + str(layer_refine) + ' bias 1.0 depth 1 smooth')
+#
+
