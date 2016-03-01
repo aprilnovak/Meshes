@@ -2,19 +2,14 @@
 # Cubic benchmarks - 
 #     Case 1: homogeneous mixture of material
 #     Case 2: Cystal structure (FCC/BCC/SC) with specified packing fraction and multi-layered pebbles
-#
-# All volumes are meshed using tetmesh. To obtain a continuous solution, the nodes at the interfaces must match. 
 
 import math
 import fractions
 
 # DELETE ANY EXISTING GEOMETRIES ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-number_to_delete = 30	# ______ number of volumes to delete before build. No volumes should already exist. 
-for i in range (0,number_to_delete):
-    cubit.cmd('split body ' + str(i))
-    cubit.cmd('delete volume ' + str(i))
-print('Deleted all existing volumes.')
+cubit.cmd('split body all')
+cubit.cmd('delete volume all')
 
 
 # USER INPUT ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -30,10 +25,6 @@ vol_factor = 1		# ______ Size factor for mesh (1 = fine, 10 = coarse)
 packing_fraction = 0.5	# ______ Packing fraction for the bed (1.0 = entirely pebbles, 0.0 = entirely flibe)
 lattice = "SC"		# ______ Lattice type (FCC, BCC, or SC)
 radius = [0.025, 0.0275, 0.03]	# ______ Layer outer radii, listed in ascending order (m)
-
-# Meshing (1 = standard, 2+ = very fine)
-fluid_refine = 1 	# ______ Fluid volume mesh refinement parameter
-layer_refine = 1	# ______ Pebble layers mesh refinement parameters
 
 
 # GEOMETRICAL CALCULATION  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -127,19 +118,31 @@ else:
 
 # MESH VOLUMES ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-if (case == 2):
-    for i in range (1, len(radius)*actual_peb + 2):
-        cubit.cmd('Volume ' + str(i) + ' scheme Tetmesh')
-        cubit.cmd('set tetmesher interior points on')
-        cubit.cmd('set tetmesher optimize level 3 overconstrained off sliver off')
-        cubit.cmd('set tetmesher boundary recovery off')
-        cubit.cmd('volume ' + str(i) + ' tetmesh growth_factor 1.0')
-        cubit.cmd('mesh Volume ' + str(i))
-        #
-        if ( i == len(radius)*actual_peb + 1):
-            cubit.cmd('refine volume ' + str(i) + ' numsplit ' + str(fluid_refine) + ' bias 1.0 depth 1 smooth')
-        else:
-            cubit.cmd('refine volume ' + str(i) + ' numsplit ' + str(layer_refine) + ' bias 1.0 depth 1 smooth')
-#
+# All volumes are meshed using tetmesh. 
+
+cubit.cmd('merge body all')
+cubit.cmd('volume all scheme Tetmesh')
+cubit.cmd('set tetmesher interior points on ')
+cubit.cmd('set tetmesher optimize level 3 overconstrained  off sliver  off ')
+cubit.cmd('set tetmesher boundary recovery  off ')
+cubit.cmd('volume all tetmesh growth_factor 1.0')
+cubit.cmd('mesh volume all')
+cubit.cmd('refine volume all numsplit 1 bias 1.0 depth 1 smooth')
+
+    
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 

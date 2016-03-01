@@ -1,7 +1,6 @@
 #!python
 # Script to create a mesh of the TMSR core with variable model parameters. This model currently only
 # allows single-layer spheres (i.e. the spheres are homogeneous). Meshing and importing the pebbles are optional.
-# All volumes are meshed using tetmesh. 
 # "______" indicates that a user-defined value is input on this line. 
 
 import math
@@ -9,11 +8,8 @@ import numpy as np
 
 # DELETE ANY EXISTING GEOMETRIES ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-number_to_delete = 15		# ______ number of volumes to delete before build. No volumes should already exist. 
-for i in range (0,number_to_delete):
-    cubit.cmd('split body ' + str(i))
-    cubit.cmd('delete volume ' + str(i))
-print('Deleted all existing volumes.')
+cubit.cmd('split body all')
+cubit.cmd('delete volume all')
 
 
 # USER INPUT ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -41,19 +37,11 @@ active_h = 92.85/205.7		# ______ bottom boundary of fuel region of core expresse
 
 # File location with pebble coordinate data
 import_pebbles = True		# ______ Boolean to optionally import pebbles
-data = np.loadtxt('/Users/aprilnovak/Documents/Meshes_Backup/Pebble_Coordinate_Data/shake_partial.inp')	# ______ Pebble coordinate data text file
+data = np.loadtxt('/Users/aprilnovak/Documents/Meshes/shake_partial.inp')	# ______ Pebble coordinate data text file
 x = data[:,0]			# ______ Column containing x-coordinates (cm)
 y = data[:,1]			# ______ Column containing y-coordinates (cm)
 z = data[:,2]			# ______ Column containing z-coordinates (cm)
 r = data[:,3]			# ______ Column containing radius lengths (cm)
-
-# Mesh geometry (1 = fine, 2+ = very fine - enter "0" if you want to use standard mesh)
-mesh_volumes = False		# ______ Boolean to optionally mesh volumes
-pebble_refine = 0		# ______ Pebble mesh refinement parameter
-fluid_active_refine = 0		# ______ Fluid mesh refinement parameter (in the active region)
-fluid_inactive_refine = 1		# ______ Fluid mesh refinement parameter (in the pure flibe region)
-reflector_refine = 1		# ______ Upper and lower reflector mesh refinement parameter
-outer_reflector_refine = 1		# ______ Outer reflector mesh refinement parameter
 
 
 # GEOMETRICAL CALCULATION  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -206,37 +194,22 @@ if (import_pebbles == True):
 
 # MESH VOLUMES ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-if (mesh_volumes==True):
-    for i in range (1, last_vol + 1):
-        cubit.cmd('Volume ' + str(i) + ' scheme Tetmesh')
-        cubit.cmd('set tetmesher interior points on')
-        cubit.cmd('set tetmesher optimize level 3 overconstrained off sliver off')
-        cubit.cmd('set tetmesher boundary recovery off')
-        cubit.cmd('volume ' + str(i) + ' tetmesh growth_factor 1.0')
-        cubit.cmd('mesh Volume ' + str(i))
-        #
-        # Refine pebble meshing
-        if (( i > existing_volumes ) and ( i < last_vol ) and (pebble_refine != 0)):
-            cubit.cmd('refine volume ' + str(i) + ' numsplit ' + str(pebble_refine) + ' bias 1.0 depth 1 smooth')
-        if (( i == last_vol ) and (fluid_active_refine != 0)):
-            cubit.cmd('refine volume ' + str(i) + ' numsplit ' + str(fluid_active_refine) + ' bias 1.0 depth 1 smooth')
-        if (((i == 4) or (i == 5)) and (reflector_refine != 0)):
-            cubit.cmd('refine volume ' + str(i) + ' numsplit ' + str(reflector_refine) + ' bias 1.0 depth 1 smooth')
-        if ((i == 1) and (outer_reflector_refine !=0)):
-            cubit.cmd('refine volume ' + str(i) + ' numsplit ' + str(outer_reflector_refine) + ' bias 1.0 depth 1 smooth')
-#
+# All volumes are meshed using tetmesh. 
+
+cubit.cmd('merge body all')
+cubit.cmd('volume all scheme Tetmesh')
+cubit.cmd('set tetmesher interior points on ')
+cubit.cmd('set tetmesher optimize level 3 overconstrained  off sliver  off ')
+cubit.cmd('set tetmesher boundary recovery  off ')
+cubit.cmd('volume all tetmesh growth_factor 1.0')
+cubit.cmd('mesh volume all')
+cubit.cmd('refine volume 1 3 4 5 ' + str(last_vol) + ' numsplit 1 bias 1.0 depth 1 smooth')
+
 # Rename Volumes (except pebbles)
-#cubit.cmd('volume 1 name "Outer Reflector"')
-#cubit.cmd('volume 3 name "Inactive Region"')
-#cubit.cmd('volume 4 name "Upper Reflector"')
-#cubit.cmd('volume 5 name "Lower Reflector"')
-#if (flag != "Angled_TMSR_Benchmark"):
-#    cubit.cmd('volume ' + str(last_vol) + ' name "Active Region"')
-#else:
-#   cubit.cmd('volume 2 name "Active Region"')
-print(core_straight_h)
-print(z)
-
-
+cubit.cmd('volume 1 name "Outer Reflector"')
+cubit.cmd('volume 3 name "Inactive Region"')
+cubit.cmd('volume 4 name "Upper Reflector"')
+cubit.cmd('volume 5 name "Lower Reflector"')
+cubit.cmd('volume ' + str(last_vol) + ' name "Active Region"')
 
 
