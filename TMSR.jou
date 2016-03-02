@@ -38,10 +38,10 @@ active_h = 92.85/205.7		# ______ bottom boundary of fuel region of core expresse
 # File location with pebble coordinate data
 import_pebbles = True		# ______ Boolean to optionally import pebbles
 data = np.loadtxt('/Users/aprilnovak/Documents/Meshes/shake_partial.inp')	# ______ Pebble coordinate data text file
-x = data[:,0]			# ______ Column containing x-coordinates (cm)
-y = data[:,1]			# ______ Column containing y-coordinates (cm)
-z = data[:,2]			# ______ Column containing z-coordinates (cm)
-r = data[:,3]			# ______ Column containing radius lengths (cm)
+xo = data[:,0]/100		# ______ Column containing x-coordinates (cm is converted to m)
+yo = data[:,1]/100		# ______ Column containing y-coordinates (cm is converted to m)
+zo = data[:,2]/100		# ______ Column containing z-coordinates (cm is converted to m)
+r = data[:,3]/100		# ______ Column containing radius lengths (cm is converted to m)
 
 # Mesh volumes
 mesh_volumes = False		# ______ Boolean to optionally mesh volumes
@@ -50,10 +50,12 @@ mesh_volumes = False		# ______ Boolean to optionally mesh volumes
 # GEOMETRICAL CALCULATION  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 # Calculate heights associated with the cones
-cone1_h = cyl3_r*math.tan(math.radians(theta1))
-cone1_h_exp = (cyl3_r-cyl2_r)*math.tan(math.radians(theta1))
-cone2_h = cyl3_r*math.tan(math.radians(theta2))
-cone2_h_exp = (cyl3_r-cyl2_r)*math.tan(math.radians(theta2))
+theta1 = math.radians(theta1)
+theta2 = math.radians(theta2)
+cone1_h = cyl3_r*math.tan(theta1)
+cone1_h_exp = (cyl3_r-cyl2_r)*math.tan(theta1)
+cone2_h = cyl3_r*math.tan(theta2)
+cone2_h_exp = (cyl3_r-cyl2_r)*math.tan(theta2)
 core_straight_h = core_h - cone1_h_exp - cone2_h_exp
 
 # Checks if angles are too large (i.e. there is no "flat face" to the core)
@@ -159,41 +161,80 @@ else:
 
 cut = []
 cutcount = []
+count = 0
+j = 0
+x = []
 
+# modify the original data set to discard pebbles outside the geometry
+
+for i in range (0, len(xo)):
+    tr = cyl3_r - math.sin(math.pi/2-theta1)*(zo[i]- (0.5*cyl1_h - (cyl1_h-core_h)/2 - cone1_h_exp))/math.sin(theta1)
+    #
+    if ((xo[i]*xo[i] + yo[i]*yo[i]) > (cyl3_r + r[i])*(cyl3_r + r[i]) or (xo[i]*xo[i] + yo[i]*yo[i]) > (tr + r[i]/math.sin(theta1))*(tr + r[i]/math.sin(theta1))) or ((zo[i] > (0.5*cyl1_h - (cyl1_h-core_h)/2-r[i])) or (zo[i] < (0.5*cyl1_h - (cyl1_h-core_h)/2 - active_h*core_h + r[i]))):
+        print('Discard pebble ' + str(i+1) + ' - outside active region (by width or height)')
+    else:
+        print('Keep pebble ' + str(i+1))
+        x.append(xo[i])
+        j = j + 1
+    #
+#
+num_pebbles = len(x)
 if (import_pebbles == True):
-    num_pebbles = len(x)
-    count = 0
     for i in range (0,num_pebbles):
-        cubit.cmd('create sphere radius ' + str(r[i]/100))
+        cubit.cmd('create sphere radius ' + str(r[i]))
         cubit.cmd('Compress all')
-        cubit.cmd('move Volume ' + str(i+1+existing_volumes + count) + ' location ' + str(x[i]/100) + ' ' + str(y[i]/100) + ' ' + str(z[i]/100))
+        cubit.cmd('move Volume ' + str(i+1+existing_volumes + count) + ' location ' + str(x[i]) + ' ' + str(y[i]) + ' ' + str(z[i]))
         # 
-        # Cut pebbles that exceed the vertical section of the active region
-        if (z[i]/100) < (0.5*core_straight_h - r[i]/100): # proceed as normally
-            if ((x[i]*x[i] + y[i]*y[i]) > (cyl3_r*100 - 3)*(cyl3_r*100 - 3)):
+        # Cut pebbles that exceed the vertical section of the active region (pebbles that are below the onset of the cones) -
+        # Their entire surfaces are below the line bordering the top of the flat portion of the active region. 
+        #
+        # In cylindrical (straight) region of core. This assumes no pebbles are located below the active region in the pebble input file
+        if (z[i] < (0.5*cyl1_h - (cyl1_h-core_h)/2 - cone1_h_exp - r[i])): 
+            if  ((x[i]*x[i] + y[i]*y[i]) > (cyl3_r - r[i])*(cyl3_r - r[i]) and (x[i]*x[i] + y[i]*y[i]) < (cyl3_r + r[i])*(cyl3_r + r[i])):
                 cubit.cmd('volume 2 copy move 0 0 0')
+                print('pebble ' + str(i+1) + ' intersects the surface of the active region straight-section')
                 count = count + 1
                 cut.append(i) # contains the indices of which pebbles intersect the surface
                 cutcount.append(count) # contains the number of pebbles cut
+            #
+            elif (x[i]*x[i] + y[i]*y[i]) > (cyl3_r + r[i])*(cyl3_r + r[i]):
+                print('Pebble ' + str(i+1) + ' is outside the active region entirely.')
+                # discard pebble data
+            #
+            else:
+                print('Pebble ' + str(i+1) + ' is inside the active region entirely (no cutting).')
         #
-        # Cut pebbles that exceed the angled section of the active region (depends on the cone angles)
+        else: 
+            #
+            # in slanted region of core (assumes no pebbles are located above the active region in the pebble input file)
+            print('Pebble ' + str(i+1) + ' is above the flat section of the active region.')
+            tr = cyl3_r - math.sin(math.pi/2-theta1)*(z[i]- (0.5*cyl1_h - (cyl1_h-core_h)/2 - cone1_h_exp))/math.sin(theta1)
+            print(tr + r[i]/math.sin(theta1))
+            print(tr - r[i]/math.sin(theta1))
+            #
+            if ((x[i]*x[i] + y[i]*y[i] > (tr - r[i]/math.sin(theta1))*(tr - r[i]/math.sin(theta1))) and (x[i]*x[i] + y[i]*y[i] < (tr + r[i]/math.sin(theta1))*(tr + r[i]/math.sin(theta1)))):
+                print('Should cut this pebble with the angled surface.')
+            elif (x[i]*x[i] + y[i]*y[i]) > (tr + r[i]/math.sin(theta1))*(tr + r[i]/math.sin(theta1)):
+                print('Discard pebble ' + str(i+1) + ' - outside the angled surface.')
+            else:
+                print('No cutting necessary for pebble ' + str(i+1) + '.')
+        #
 #
 # Cut pebbles that intersect the azimuthal surface of the active region
-    for i in range (0,len(cut)):
-        cubit.cmd('intersect body ' + str(cut[i] + 1 + existing_volumes + cutcount[i]) + ' ' + str(cut[i] + 1 + existing_volumes + cutcount[i] - 1))
+    #for i in range (0,len(cut)):
+    #    cubit.cmd('intersect body ' + str(cut[i] + 1 + existing_volumes + cutcount[i]) + ' ' + str(cut[i] + 1 + existing_volumes + cutcount[i] - 1))
 #
 # Copy each pebble.
-    for i in range (1, len(x) + 2):
-        cubit.cmd('body ' + str(i + existing_volumes) + ' copy move 0 0 0') 
+    #for i in range (1, len(x) + 2):
+    #    cubit.cmd('body ' + str(i + existing_volumes) + ' copy move 0 0 0') 
 #
-    last_vol = len(x) + (1 + len(x) + len(cut) + existing_volumes)
+    #last_vol = len(x) + (1 + len(x) + len(cut) + existing_volumes)
 # Subtract all spheres from body 2 (active region)
-    string = ' '
-    for i in range (1 + len(x) + len(cut)+ existing_volumes, last_vol):
-        string = string + str(i) + ' '
-    cubit.cmd('subtract body ' + str(string) + ' from body 2')
+    #string = ' '
+    #for i in range (1 + len(x) + len(cut)+ existing_volumes, last_vol):
+    #    string = string + str(i) + ' '
+    #cubit.cmd('subtract body ' + str(string) + ' from body 2')
 #
-
 
 # MESH VOLUMES ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -215,5 +256,7 @@ if (mesh_volumes != False):
 #cubit.cmd('volume 4 name "Upper Reflector"')
 #cubit.cmd('volume 5 name "Lower Reflector"')
 #cubit.cmd('volume ' + str(last_vol) + ' name "Active Region"')
-
-
+print(count)
+print(cutcount)
+print(xo)
+print(x)
